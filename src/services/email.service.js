@@ -49,6 +49,14 @@ async function sendWelcomeEmail(user){
     await sendEmail(user.email, subject, text, html);
 }       
 
+// transaction email
+async function sendTransactionEmail(userEmail, name, amount, toAccount){
+    const subject = "Transaction Successful";
+    const text = `Hello ${name}, Transaction of ${amount} is successfulto ${toAccount}`;
+    const html = `<h1>Hello ${name}, Transaction successful</h1>`;
+    await sendEmail(userEmail, subject, text, html);
+}     
 
-module.exports = { sendEmail, sendWelcomeEmail };
+
+module.exports = { sendEmail, sendWelcomeEmail, sendTransactionEmail };
 

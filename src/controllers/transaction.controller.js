@@ -2,6 +2,7 @@ const transactionModel = require('../models/transaction.model');
 const accountModel = require('../models/account.model');
 const ledgerModel = require('../models/ledger.model');
 const emailService = require('../services/email.service');
+const mongoose = require('mongoose');
 
 async function createTransaction(req, res){
     
@@ -11,7 +12,7 @@ async function createTransaction(req, res){
         return res.status(400).json({ msg: "Missing required fields" });
     }
 
-    // find users of provided account if exists
+    // check account status
     const fromuser = await accountModel.findById(fromAccount);
     const touser = await accountModel.findById(toAccount);
 
@@ -56,14 +57,14 @@ async function createTransaction(req, res){
         }
     }
 
+    // sender balance from ledger
+    const balance = await fromuser.getBalance();
+    if(balance < amount){ return res.status(400).json({ msg: "insufficent balance"})};
+
+
     // check if amount is valid
     if(amount <= 0){
         return res.status(400).json({ msg: "Invalid amount" });
-    }
-
-    // check if from user has enough balance
-    if(fromuser.balance < amount){
-        return res.status(400).json({ msg: "Insufficient balance" });
     }
 
     // update from user balance
@@ -74,17 +75,52 @@ async function createTransaction(req, res){
     touser.balance += amount;
     await touser.save();
 
-    // create
-    const transaction = new transactionModel({
+    // create transaction
+    const session = mongoose.startSession();
+    session.startTransaction(); 
+
+    const transaction = await transactionModel.create({
         fromAccount,
         toAccount,
         amount,
-        idempotencyKey
+        idempotencyKey,
+        status: "pending"
+    }, {session});
+
+    const debitLedgerEntry = await ledgerModel.create({
+        account: fromAccount,
+        transaction: transaction._id,
+        amount,
+        type: "debit",
+        balance: fromuser.balance
+    }, {session});  
+
+    const creditLedgerEntry = await ledgerModel.create({
+        account: toAccount,
+        transaction: transaction._id,
+        amount,
+        type: "credit",
+        balance: touser.balance
+    }, {session});
+
+    transaction.status = "success";
+    await transaction.save({session});
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // send transaction email
+    sendTransactionEmail(fromuser.email, fromuser.name, amount, toAccount);
+    sendTransactionEmail(touser.email, touser.name, amount, fromAccount);   
+
+    return res.status(200).json({
+        msg: "transaction successful",
+        transaction
     });
 
-    transaction.save()
-        .then(() => res.status(201).json({ msg: "Transaction created successfully" }))
-        .catch((error) => res.status(500).json({ msg: "Failed to create transaction" }));   
+    // transaction.save()
+    //     .then(() => res.status(201).json({ msg: "Transaction created successfully" }))
+    //     .catch((error) => res.status(500).json({ msg: "Failed to create transaction" }));   
 }
 
 

@@ -64,10 +64,34 @@ accountSchema.methods.getBalance = async function(){
         {
             $group: {
                 _id: null,
-                balance: { $sum: "$amount" }
+
+                totalDebit: { $sum: {
+                    $cond: [
+                        { $eq: ["$type", "debit"] },
+                        "$amount",
+                        0
+                    ]
+                } },
+
+                totalCredit: { $sum: {
+                    $cond: [
+                        { $eq: ["$type", "credit"] },
+                        "$amount",
+                        0
+                    ]   
+                } }
             }
-        }
-    ])  
+        },
+        {
+            $project: {
+                _id: 0,
+                balance: { $subtract: ["$totalCredit", "$totalDebit"] } 
+            }
+        }   
+    ]) ;
+    if(balance.length === 0){
+        return 0;
+    }
     return balance[0].balance;  
 }
 
