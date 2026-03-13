@@ -75,33 +75,34 @@ async function createTransaction(req, res){
     touser.balance += amount;
     await touser.save();
 
+    try {
     // create transaction
     const session = mongoose.startSession();
     session.startTransaction(); 
 
-    const transaction = await transactionModel.create({
+    const transaction = new transactionModel({
         fromAccount,
         toAccount,
         amount,
         idempotencyKey,
         status: "pending"
-    }, {session});
+    });
 
-    const debitLedgerEntry = await ledgerModel.create({
+    const debitLedgerEntry = await ledgerModel.create([{
         account: fromAccount,
         transaction: transaction._id,
         amount,
         type: "debit",
         balance: fromuser.balance
-    }, {session});  
+    }], {session});  
 
-    const creditLedgerEntry = await ledgerModel.create({
+    const creditLedgerEntry = await ledgerModel.create([{
         account: toAccount,
         transaction: transaction._id,
         amount,
         type: "credit",
         balance: touser.balance
-    }, {session});
+    }], {session});
 
     transaction.status = "success";
     await transaction.save({session});
@@ -117,6 +118,12 @@ async function createTransaction(req, res){
         msg: "transaction successful",
         transaction
     });
+    }
+    catch(e){
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(500).json({ msg: "Failed to create transaction" });
+    }
 
     // transaction.save()
     //     .then(() => res.status(201).json({ msg: "Transaction created successfully" }))
@@ -144,27 +151,34 @@ async function initialFundTransaction(req, res){
     const session = await mongoose.startSession();
     session.startTransaction();
 
-    const transaction = await transactionModel.create({
+    // const transaction = await transactionModel.create({
+    //     fromAccount: fromAccount._id,
+    //     toAccount,
+    //     amount,
+    //     idempotencyKey,
+    //     status: "pending"
+    // }, {session});
+    const transaction = new transactionModel({
         fromAccount: fromAccount._id,
         toAccount,
         amount,
         idempotencyKey,
         status: "pending"
-    }, {session});
+    });
 
-    const creditLedgerEntry = await ledgerModel.create({
+    const creditLedgerEntry = await ledgerModel.create([{
         account: toAccount,
         transaction: transaction._id,
         amount,
         type: "credit",
-    }, {session});
+    }], {session});
 
-    const debitLedgerEntry = await ledgerModel.create({
+    const debitLedgerEntry = await ledgerModel.create([{
         account: fromAccount._id,
         transaction: transaction._id,
         amount,
         type: "debit",
-    }, {session});
+    }], {session});
 
     transaction.status = "success";
     await transaction.save({session});

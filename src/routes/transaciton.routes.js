@@ -19,4 +19,4 @@ transactionRoutes.post("/create", authMiddleware, createTransaction);
  */
 transactionRoutes.post("/system/initial-funds", systemUserMW, initialFundTransaction);
 
-module.exports = transactionRoutes; 
+module.exports = transactionRoutes;  
