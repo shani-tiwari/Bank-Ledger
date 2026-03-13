@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const { sendWelcomeEmail } = require('../services/email.service');
+const tokenBlackList = require('../models/blacklist.model');
 
 
 
@@ -78,6 +79,33 @@ const loginUser = async(req, res) => {
         console.log(error);
         res.status(500).json({ message: "Internal server error" });
     }
+};
+
+
+const logoutController = async(req, res) => {
+    try {
+        const token = req.cookies.token;
+        if(!token){
+            return res.status(401).json({ message: "No token found" });
+        }
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await userModel.findById(decoded.id);
+        if(!user){
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        await tokenBlackList.create({
+            token,
+            user: user._id
+        });
+        res.clearCookie("token");
+        
+        res.status(200).json({ message: "User logged out successfully" });
+
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ message: "Internal server error" });
+    }   
 }
 
-module.exports = { registerUser, loginUser };  
+module.exports = { registerUser, loginUser, logoutController };  
