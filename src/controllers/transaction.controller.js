@@ -121,9 +121,66 @@ async function createTransaction(req, res){
     // transaction.save()
     //     .then(() => res.status(201).json({ msg: "Transaction created successfully" }))
     //     .catch((error) => res.status(500).json({ msg: "Failed to create transaction" }));   
+};
+
+
+async function initialFundTransaction(req, res){
+    const {fromAccount, toAccount, amount, idempotencyKey} = req.body;
+    if(!fromAccount || !toAccount || !amount || !idempotencyKey){
+        return res.status(400).json({ msg: "Missing required fields" });
+    }
+
+    const toUser = await accountModel.findOne({_id: toAccount});
+    if(!toUser){
+        return res.status(404).json({ msg: "User not found" });
+    }
+    if(toUser.status !== "active"){
+        return res.status(400).json({ msg: "User is not active" });
+    }
+    if(toUser.currency !== fromAccount.currency){
+        return res.status(400).json({ msg: "User currency is not same" });
+    }   
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    const transaction = await transactionModel.create({
+        fromAccount: fromAccount._id,
+        toAccount,
+        amount,
+        idempotencyKey,
+        status: "pending"
+    }, {session});
+
+    const creditLedgerEntry = await ledgerModel.create({
+        account: toAccount,
+        transaction: transaction._id,
+        amount,
+        type: "credit",
+    }, {session});
+
+    const debitLedgerEntry = await ledgerModel.create({
+        account: fromAccount._id,
+        transaction: transaction._id,
+        amount,
+        type: "debit",
+    }, {session});
+
+    transaction.status = "success";
+    await transaction.save({session});
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(200).json({
+        msg: "transaction successful",
+        transaction
+    });
+    
 }
 
 
 module.exports = {
-    createTransaction
+    createTransaction,
+    initialFundTransaction
 }

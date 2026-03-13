@@ -26,6 +26,12 @@ const userSchema = new mongoose.Schema({
         maxlength: [12, "Less than 12 characters required"],
         select: false
     },
+    systemUser: {
+        type: Boolean,
+        default: false,
+        immutable: true,
+        select: false
+    }
 
 },
    { timestamps: true } // create/update time save
