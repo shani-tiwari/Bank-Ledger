@@ -54,6 +54,22 @@ const accountSchema = new mongoose.Schema({
 // can be find with status also - compound index 
 accountSchema.index({user: 1, status: 1});
 
+accountSchema.methods.getBalance = async function(){
+    const balance = await ledgerModel.aggregate([
+        {
+            $match: {
+                account: this._id
+            }
+        },
+        {
+            $group: {
+                _id: null,
+                balance: { $sum: "$amount" }
+            }
+        }
+    ])  
+    return balance[0].balance;  
+}
 
 const accountModel = mongoose.model('Account', accountSchema);  
 module.exports = accountModel;
